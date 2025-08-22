@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Quiz • Inteligência (P-2)</title>
+  <meta charset="UTF-8" />
+  <title>Quiz • Inteligência (P-2) + Ranking</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
@@ -13,7 +13,8 @@
     header{padding:28px 20px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-bottom:1px solid #1f2937}
     header h1{margin:0 0 6px 0; font-size:24px; letter-spacing:.4px}
     header p{margin:0; color:var(--muted); font-size:14px}
-    .wrap{max-width:800px; margin:24px auto; padding:16px}
+    .wrap{max-width:1000px; margin:24px auto; padding:16px}
+    .grid{display:grid; grid-template-columns: 1fr 360px; gap:18px}
     .card{background:var(--card); border-radius:14px; padding:22px; box-shadow:0 10px 30px rgba(2,6,23,.3)}
     #pergunta{font-size:20px; margin:0 0 14px 0}
     .opcoes{display:grid; gap:10px; margin-top:12px}
@@ -22,13 +23,32 @@
       color:var(--text); text-align:left; transition:.15s; font-size:16px;
     }
     button.opcao:hover{border-color:#334155; transform:translateY(-1px)}
-    .rodape{display:flex; gap:10px; margin-top:16px; align-items:center}
-    .rodape button.action{
-      background:var(--accent); border:none; padding:10px 14px; border-radius:10px; cursor:pointer; color:#0b1220; font-weight:600;
-    }
+    button.opcao:disabled{opacity:.7; cursor:not-allowed}
+    .rodape{display:flex; gap:10px; margin-top:16px; align-items:center; flex-wrap:wrap}
+    .rodape button.action{ background:var(--accent); border:none; padding:10px 14px; border-radius:10px; cursor:pointer; color:#0b1220; font-weight:600; }
     #resultado{min-height:22px; font-weight:600}
     .ok{color:var(--ok)} .err{color:var(--danger)}
     .status{color:var(--muted); font-size:13px}
+
+    /* Ranking */
+    .ranking h3{margin:0 0 8px 0}
+    .ranking .meta{color:var(--muted); font-size:12px; margin-bottom:8px}
+    .ranking ol{margin:0; padding-left:18px}
+    .ranking li{margin:4px 0; display:flex; justify-content:space-between; gap:8px}
+    .you{background:#0b1220; border:1px dashed #334155; padding:8px 10px; border-radius:10px; margin-top:12px}
+
+    /* Modal de identificação */
+    .modal{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2,6,23,.6); backdrop-filter: blur(2px);}
+    .modal .box{width:min(520px, 92vw); background:var(--card); border-radius:16px; padding:20px; box-shadow:0 20px 40px rgba(0,0,0,.45)}
+    .modal h2{margin:0 0 6px 0; font-size:20px}
+    .modal p{margin:0 0 12px 0; color:var(--muted)}
+    .modal .row{display:flex; gap:10px}
+    .modal input{flex:1; background:#0f2137; border:1px solid #1f2937; color:var(--text); border-radius:10px; padding:12px 14px; font-size:16px}
+    .modal button{background:var(--accent); border:none; padding:12px 16px; border-radius:10px; color:#0b1220; font-weight:700; cursor:pointer}
+
+    @media (max-width: 960px){
+      .grid{grid-template-columns: 1fr}
+    }
   </style>
 </head>
 <body>
@@ -37,102 +57,105 @@
     <p>As questões aparecem em ordem aleatória, e as opções também.</p>
   </header>
 
-  <div class="wrap">
+  <div class="wrap grid">
+    <!-- COLUNA ESQUERDA: Quiz -->
     <div class="card">
       <h2 id="pergunta">Carregando pergunta...</h2>
       <div id="opcoes" class="opcoes"></div>
       <div class="rodape">
         <button id="btnProxima" class="action">Próxima</button>
+        <button id="btnReiniciar" class="action" style="display:none; background:#a78bfa">Reiniciar</button>
         <span id="resultado"></span>
         <span id="status" class="status"></span>
+      </div>
+    </div>
+
+    <!-- COLUNA DIREITA: Ranking -->
+    <div class="card ranking">
+      <h3>Ranking da Turma</h3>
+      <div class="meta">
+        <span id="metaInfo">Top 10 • melhor pontuação por aluno</span>
+      </div>
+      <ol id="listaRanking"></ol>
+      <div id="voceBox" class="you" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Modal para identificar usuário -->
+  <div id="modal" class="modal" aria-modal="true" role="dialog">
+    <div class="box">
+      <h2>Identifique-se para entrar no Ranking</h2>
+      <p>Digite <strong>seu nome completo</strong> ou o identificador usado pela turma.</p>
+      <div class="row">
+        <input id="nomeInput" type="text" placeholder="Ex.: Maria Silva" maxlength="60" autocomplete="name" />
+        <button id="btnEntrar">Entrar</button>
       </div>
     </div>
   </div>
 
   <script>
-    // ====== Suas questões (sem numeração e sem grau de dificuldade) ======
+    // ==========================
+    // CONFIGURAÇÃO DO RANKING
+    // ==========================
+    // Versão A (padrão): localStorage (ranking local por navegador/computador)
+    // Versão B (opcional): Firebase (ranking compartilhado em tempo real)
+    const useFirebase = false; // mude para true se configurar Firebase abaixo
+
+    // Se optar por Firebase, preencha suas credenciais e descomente o bloco Firebase.
+    // IMPORTANTE: para produção, use regras de segurança adequadas no Firestore/Realtime DB.
+    /*
+    // ===== Firebase (opcional) =====
+    const firebaseConfig = {
+      apiKey: "SUA_API_KEY",
+      authDomain: "SEU_PROJETO.firebaseapp.com",
+      projectId: "SEU_PROJETO",
+      storageBucket: "SEU_PROJETO.appspot.com",
+      messagingSenderId: "",
+      appId: ""
+    };
+    // Carregamento dinâmico do SDK quando ativado
+    let fb = null;
+    async function initFirebase(){
+      if(!useFirebase) return null;
+      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js');
+      const { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js');
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      fb = { db, doc, setDoc, getDoc, collection, getDocs, query, orderBy, limit };
+      return fb;
+    }
+    */
+
+    // ==========================
+    // DADOS DO QUIZ (perguntas)
+    // ==========================
     const questoes = [
-      {
-        pergunta: "A diferença entre dado e informação está em:",
-        opcoes: ["O dado já é conhecimento processado.", "A informação é apenas um conjunto de números.", "O dado é bruto, a informação é organizada e interpretada.", "Não existe diferença, são sinônimos."],
-        correta: "O dado é bruto, a informação é organizada e interpretada."
-      },
-      {
-        pergunta: "Qual documento normativo instituiu o Sistema Brasileiro de Inteligência (SISBIN)?",
-        opcoes: ["Decreto nº 3.696/2000", "Lei nº 9.883/1999", "Constituição Federal de 1988, art. 142", "Lei Complementar nº 10.990/1997"],
-        correta: "Lei nº 9.883/1999"
-      },
-      {
-        pergunta: "Órgão central do Sistema Brasileiro de Inteligência (SISBIN):",
-        opcoes: ["Polícia Federal", "Forças Armadas", "ABIN – Agência Brasileira de Inteligência", "Ministério da Justiça"],
-        correta: "ABIN – Agência Brasileira de Inteligência"
-      },
-      {
-        pergunta: "Entre os produtos de inteligência, qual é o mais indicado para atualizar periodicamente o comando sobre uma situação em evolução?",
-        opcoes: ["Informe de Inteligência", "Relatório de Inteligência", "Boletim de Inteligência", "Nota de Serviço"],
-        correta: "Boletim de Inteligência"
-      },
-      {
-        pergunta: "Qual seção do Estado-Maior da OPM é responsável pela atividade de inteligência?",
-        opcoes: ["P-1 (Pessoal)", "P-2 (Inteligência)", "P-3 (Operações)", "P-4 (Logística)"],
-        correta: "P-2 (Inteligência)"
-      },
-      {
-        pergunta: "São produtos típicos de inteligência, exceto:",
-        opcoes: ["Informe", "Relatório de Inteligência", "Boletim de Inteligência", "Inquérito Policial"],
-        correta: "Inquérito Policial"
-      },
-      {
-        pergunta: "Exemplo de situação que exige atuação da inteligência policial:",
-        opcoes: ["Manutenção predial da OPM.", "Levantamento de possíveis ameaças em grandes eventos.", "Preenchimento de folha de pagamento.", "Escala de férias dos policiais."],
-        correta: "Levantamento de possíveis ameaças em grandes eventos."
-      },
-      {
-        pergunta: "O ciclo de inteligência compreende quatro fases principais. Qual delas corresponde à produção do conhecimento?",
-        opcoes: ["Planejamento", "Obtenção de dados", "Análise", "Difusão"],
-        correta: "Análise"
-      },
-      {
-        pergunta: "Uma diferença entre inteligência e investigação criminal é:",
-        opcoes: ["A inteligência busca prevenir, a investigação busca reprimir.", "Ambas são idênticas em métodos e objetivos.", "A investigação ocorre antes da inteligência.", "A inteligência só ocorre em ambiente militar."],
-        correta: "A inteligência busca prevenir, a investigação busca reprimir."
-      },
-      {
-        pergunta: "Um comandante solicita ao P-2 informações sobre possíveis grupos organizados que possam agir em protestos. O produto mais adequado seria:",
-        opcoes: ["Parte de serviço.", "Boletim de Inteligência.", "Relatório de Inteligência.", "Escala extraordinária."],
-        correta: "Relatório de Inteligência."
-      },
-      {
-        pergunta: "O papel do P-2 dentro da OPM é:",
-        opcoes: ["Controlar armamento.", "Atuar no ciclo de inteligência, subsidiando decisões do comando.", "Elaborar escalas de serviço.", "Conceder licenças e férias."],
-        correta: "Atuar no ciclo de inteligência, subsidiando decisões do comando."
-      },
-      {
-        pergunta: "Um dos princípios fundamentais da doutrina de inteligência é:",
-        opcoes: ["Impessoalidade e objetividade.", "Parcialidade e informalidade.", "Precipitação e improviso.", "Publicidade irrestrita."],
-        correta: "Impessoalidade e objetividade."
-      },
-      {
-        pergunta: "A Lei nº 9.883/1999 criou a ABIN e o SISBIN. A relação dessa lei com a Brigada Militar é:",
-        opcoes: ["Nenhuma, pois a BM não faz parte do SISBIN.", "A BM integra o SISBIN, produzindo conhecimento em âmbito estadual.", "A BM apenas recebe relatórios da ABIN, sem produzir inteligência.", "O SISBIN substitui a inteligência da BM."],
-        correta: "A BM integra o SISBIN, produzindo conhecimento em âmbito estadual."
-      },
-      {
-        pergunta: "Durante um evento esportivo, a inteligência detecta cambistas e falsificação de ingressos. A medida correta do P-2 é:",
-        opcoes: ["Produzir relatório de inteligência e subsidiar a decisão do comando.", "Prender imediatamente os suspeitos sem análise.", "Comunicar apenas a imprensa.", "Não agir, pois não é sua atribuição."],
-        correta: "Produzir relatório de inteligência e subsidiar a decisão do comando."
-      },
-      {
-        pergunta: "Por que se afirma que a inteligência deve ser proativa e não apenas reativa?",
+      { pergunta: "A diferença entre dado e informação está em:", opcoes: ["O dado já é conhecimento processado.", "A informação é apenas um conjunto de números.", "O dado é bruto, a informação é organizada e interpretada.", "Não existe diferença, são sinônimos."], correta: "O dado é bruto, a informação é organizada e interpretada." },
+      { pergunta: "Qual documento normativo instituiu o Sistema Brasileiro de Inteligência (SISBIN)?", opcoes: ["Decreto nº 3.696/2000", "Lei nº 9.883/1999", "Constituição Federal de 1988, art. 142", "Lei Complementar nº 10.990/1997"], correta: "Lei nº 9.883/1999" },
+      { pergunta: "Órgão central do Sistema Brasileiro de Inteligência (SISBIN):", opcoes: ["Polícia Federal", "Forças Armadas", "ABIN – Agência Brasileira de Inteligência", "Ministério da Justiça"], correta: "ABIN – Agência Brasileira de Inteligência" },
+      { pergunta: "Entre os produtos de inteligência, qual é o mais indicado para atualizar periodicamente o comando sobre uma situação em evolução?", opcoes: ["Informe de Inteligência", "Relatório de Inteligência", "Boletim de Inteligência", "Nota de Serviço"], correta: "Boletim de Inteligência" },
+      { pergunta: "Qual seção do Estado-Maior da OPM é responsável pela atividade de inteligência?", opcoes: ["P-1 (Pessoal)", "P-2 (Inteligência)", "P-3 (Operações)", "P-4 (Logística)"], correta: "P-2 (Inteligência)" },
+      { pergunta: "São produtos típicos de inteligência, exceto:", opcoes: ["Informe", "Relatório de Inteligência", "Boletim de Inteligência", "Inquérito Policial"], correta: "Inquérito Policial" },
+      { pergunta: "Exemplo de situação que exige atuação da inteligência policial:", opcoes: ["Manutenção predial da OPM.", "Levantamento de possíveis ameaças em grandes eventos.", "Preenchimento de folha de pagamento.", "Escala de férias dos policiais."], correta: "Levantamento de possíveis ameaças em grandes eventos." },
+      { pergunta: "O ciclo de inteligência compreende quatro fases principais. Qual delas corresponde à produção do conhecimento?", opcoes: ["Planejamento", "Obtenção de dados", "Análise", "Difusão"], correta: "Análise" },
+      { pergunta: "Uma diferença entre inteligência e investigação criminal é:", opcoes: ["A inteligência busca prevenir, a investigação busca reprimir.", "Ambas são idênticas em métodos e objetivos.", "A investigação ocorre antes da inteligência.", "A inteligência só ocorre em ambiente militar."], correta: "A inteligência busca prevenir, a investigação busca reprimir." },
+      { pergunta: "Um comandante solicita ao P-2 informações sobre possíveis grupos organizados que possam agir em protestos. O produto mais adequado seria:", opcoes: ["Parte de serviço.", "Boletim de Inteligência.", "Relatório de Inteligência.", "Escala extraordinária."], correta: "Relatório de Inteligência." },
+      { pergunta: "O papel do P-2 dentro da OPM é:", opcoes: ["Controlar armamento.", "Atuar no ciclo de inteligência, subsidiando decisões do comando.", "Elaborar escalas de serviço.", "Conceder licenças e férias."], correta: "Atuar no ciclo de inteligência, subsidiando decisões do comando." },
+      { pergunta: "Um dos princípios fundamentais da doutrina de inteligência é:", opcoes: ["Impessoalidade e objetividade.", "Parcialidade e informalidade.", "Precipitação e improviso.", "Publicidade irrestrita."], correta: "Impessoalidade e objetividade." },
+      { pergunta: "A Lei nº 9.883/1999 criou a ABIN e o SISBIN. A relação dessa lei com a Brigada Militar é:", opcoes: ["Nenhuma, pois a BM não faz parte do SISBIN.", "A BM integra o SISBIN, produzindo conhecimento em âmbito estadual.", "A BM apenas recebe relatórios da ABIN, sem produzir inteligência.", "O SISBIN substitui a inteligência da BM."], correta: "A BM integra o SISBIN, produzindo conhecimento em âmbito estadual." },
+      { pergunta: "Durante um evento esportivo, a inteligência detecta cambistas e falsificação de ingressos. A medida correta do P-2 é:", opcoes: ["Produzir relatório de inteligência e subsidiar a decisão do comando.", "Prender imediatamente os suspeitos sem análise.", "Comunicar apenas a imprensa.", "Não agir, pois não é sua atribuição."], correta: "Produzir relatório de inteligência e subsidiar a decisão do comando." },
+      { pergunta: "Por que se afirma que a inteligência deve ser proativa e não apenas reativa?",
         opcoes: ["Porque age somente depois dos crimes.", "Porque antecipa riscos, prevenindo ocorrências.", "Porque depende sempre da investigação criminal.", "Porque só atua em operações conjuntas."],
-        correta: "Porque antecipa riscos, prevenindo ocorrências."
-      }
+        correta: "Porque antecipa riscos, prevenindo ocorrências." }
     ];
 
-    // ====== Lógica do jogo ======
+    // ==========================
+    // LÓGICA DO JOGO
+    // ==========================
     const usado = new Set();
     let perguntaAtual = null;
     let pontuacao = 0;
+    let jogador = null; // { id: string (nome), best: number }
 
     function shuffle(arr){
       const a = arr.slice();
@@ -144,14 +167,11 @@
     }
 
     function proximaPergunta(){
-      const status = document.getElementById("status");
-      status.textContent = `${usado.size}/${questoes.length} respondidas • Pontos: ${pontuacao}`;
-      document.getElementById("resultado").textContent = "";
+      updateStatus();
+      setResultado("");
 
       if(usado.size === questoes.length){
-        document.getElementById("pergunta").textContent = "Fim do Quiz! Parabéns pelo empenho.";
-        document.getElementById("opcoes").innerHTML = "";
-        document.getElementById("btnProxima").disabled = true;
+        fimDoQuiz();
         return;
       }
 
@@ -179,23 +199,200 @@
 
     function onEscolha(ev){
       const correto = ev.currentTarget.dataset.correct === "1";
-      const res = document.getElementById("resultado");
       if(correto){
-        res.textContent = "✅ Correto!";
-        res.className = "ok";
+        setResultado("✅ Correto!", true);
         pontuacao++;
       }else{
-        res.textContent = "❌ Errado!";
-        res.className = "err";
+        setResultado("❌ Errado!", false);
       }
       // desabilita cliques após resposta
       document.querySelectorAll("button.opcao").forEach(b=>b.disabled=true);
-      // atualiza status
-      document.getElementById("status").textContent = `${usado.size}/${questoes.length} respondidas • Pontos: ${pontuacao}`;
+      updateStatus();
+    }
+
+    function setResultado(txt, ok){
+      const res = document.getElementById("resultado");
+      res.textContent = txt;
+      res.className = ok === true ? "ok" : ok === false ? "err" : "";
+    }
+
+    function updateStatus(){
+      const status = document.getElementById("status");
+      status.textContent = `${usado.size}/${questoes.length} respondidas • Pontos: ${pontuacao}`;
+    }
+
+    function fimDoQuiz(){
+      document.getElementById("pergunta").textContent = `Fim do Quiz! ${jogador ? jogador.id+',' : ''} você fez ${pontuacao} ponto(s).`;
+      document.getElementById("opcoes").innerHTML = "";
+      document.getElementById("btnProxima").disabled = true;
+      document.getElementById("btnReiniciar").style.display = "inline-block";
+
+      // salva no ranking
+      salvarPontuacao(jogador.id, pontuacao).then(()=>{
+        carregarERenderRanking(jogador.id);
+      });
+    }
+
+    function reiniciar(){
+      usado.clear();
+      perguntaAtual = null;
+      pontuacao = 0;
+      document.getElementById("btnProxima").disabled = false;
+      document.getElementById("btnReiniciar").style.display = "none";
+      proximaPergunta();
     }
 
     document.getElementById("btnProxima").addEventListener("click", proximaPergunta);
-    proximaPergunta();
+    document.getElementById("btnReiniciar").addEventListener("click", reiniciar);
+
+    // ==========================
+    // IDENTIFICAÇÃO DO JOGADOR
+    // ==========================
+    const modal = document.getElementById('modal');
+    const nomeInput = document.getElementById('nomeInput');
+    const btnEntrar = document.getElementById('btnEntrar');
+
+    function normalizarNome(nome){
+      return nome.trim().replace(/\s+/g,' ').slice(0,60);
+    }
+
+    function entrar(){
+      const nome = normalizarNome(nomeInput.value);
+      if(!nome){
+        alert('Por favor, informe seu nome.');
+        nomeInput.focus();
+        return;
+      }
+      jogador = { id: nome, best: 0 };
+      modal.style.display = 'none';
+      // inicia jogo
+      proximaPergunta();
+      // carrega ranking (assíncrono)
+      carregarERenderRanking(jogador.id);
+    }
+
+    btnEntrar.addEventListener('click', entrar);
+    nomeInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') entrar(); });
+
+    // ==========================
+    // RANKING: localStorage (padrão) e Firebase (opcional)
+    // ==========================
+    const LS_KEY = 'quiz_p2_ranking_v1';
+
+    function getRankingLocal(){
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      }catch(e){ return []; }
+    }
+
+    function setRankingLocal(arr){
+      localStorage.setItem(LS_KEY, JSON.stringify(arr));
+    }
+
+    function salvarPontuacaoLocal(nome, score){
+      const now = new Date().toISOString();
+      const rank = getRankingLocal();
+      const i = rank.findIndex(r => r.nome.toLowerCase() === nome.toLowerCase());
+      if(i >= 0){
+        // guarda a melhor pontuação
+        if(score > rank[i].score){
+          rank[i] = { nome, score, quando: now };
+        }
+      }else{
+        rank.push({ nome, score, quando: now });
+      }
+      // ordena desc, desempate pelo mais recente
+      rank.sort((a,b)=> b.score - a.score || (b.quando.localeCompare(a.quando)) );
+      setRankingLocal(rank);
+      return Promise.resolve();
+    }
+
+    function obterTopLocal(topN=10){
+      const rank = getRankingLocal();
+      rank.sort((a,b)=> b.score - a.score || (b.quando.localeCompare(a.quando)) );
+      return Promise.resolve(rank.slice(0, topN));
+    }
+
+    async function salvarPontuacao(nome, score){
+      if(useFirebase){
+        // ===== Exemplo Firestore: guarda melhor pontuação por nome =====
+        // await initFirebase();
+        // const ref = fb.doc(fb.db, 'quizP2Ranking', nome);
+        // const snap = await fb.getDoc(ref);
+        // const now = new Date().toISOString();
+        // if(!snap.exists() || score > (snap.data().score || 0)){
+        //   await fb.setDoc(ref, { nome, score, quando: now });
+        // }
+        // return;
+        console.warn('Firebase ativado mas o bloco está comentado. Preencha as credenciais e descomente.');
+        return salvarPontuacaoLocal(nome, score);
+      } else {
+        return salvarPontuacaoLocal(nome, score);
+      }
+    }
+
+    async function obterTop(topN=10){
+      if(useFirebase){
+        // await initFirebase();
+        // const q = fb.query(fb.collection(fb.db, 'quizP2Ranking'), fb.orderBy('score','desc'), fb.limit(topN));
+        // const snap = await fb.getDocs(q);
+        // const arr = [];
+        // snap.forEach(d=> arr.push(d.data()));
+        // return arr;
+        return obterTopLocal(topN);
+      } else {
+        return obterTopLocal(topN);
+      }
+    }
+
+    async function carregarERenderRanking(nomeAtual){
+      const top = await obterTop(10);
+      renderRanking(top, nomeAtual);
+    }
+
+    function renderRanking(lista, nomeAtual){
+      const ol = document.getElementById('listaRanking');
+      ol.innerHTML = '';
+      lista.forEach((r, idx)=>{
+        const li = document.createElement('li');
+        const esquerda = document.createElement('span');
+        esquerda.textContent = `${idx+1}. ${r.nome}`;
+        const direita = document.createElement('span');
+        direita.textContent = `${r.score} pts`;
+        li.appendChild(esquerda);
+        li.appendChild(direita);
+        if(nomeAtual && r.nome.toLowerCase() === nomeAtual.toLowerCase()){
+          li.style.fontWeight = '700';
+        }
+        ol.appendChild(li);
+      });
+
+      // Box "você"
+      const you = document.getElementById('voceBox');
+      if(nomeAtual){
+        const rankAll = useFirebase ? [] : getRankingLocal();
+        const registro = rankAll.find(r => r.nome.toLowerCase() === nomeAtual.toLowerCase());
+        if(registro){
+          const pos = lista.findIndex(r => r.nome.toLowerCase() === nomeAtual.toLowerCase());
+          you.style.display = 'block';
+          you.textContent = pos >= 0
+            ? `Você: ${registro.nome} • Melhor: ${registro.score} pts • Posição: ${pos+1}`
+            : `Você: ${registro.nome} • Melhor: ${registro.score} pts`;
+        } else {
+          you.style.display = 'none';
+        }
+      } else {
+        you.style.display = 'none';
+      }
+    }
+
+    // ==========================
+    // INÍCIO: esperar identificação
+    // ==========================
+    // Foco automático no input do modal
+    setTimeout(()=> nomeInput.focus(), 50);
   </script>
 </body>
 </html>
