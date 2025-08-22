@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Quiz • Inteligência (P-2)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0f172a; --card:#111827; --muted:#94a3b8; --accent:#22d3ee; --text:#e5e7eb; --ok:#10b981; --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial; background:#0f172a; color:var(--text)}
+    header{padding:28px 20px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-bottom:1px solid #1f2937}
+    header h1{margin:0 0 6px 0; font-size:24px; letter-spacing:.4px}
+    header p{margin:0; color:var(--muted); font-size:14px}
+    .wrap{max-width:800px; margin:24px auto; padding:16px}
+    .card{background:var(--card); border-radius:14px; padding:22px; box-shadow:0 10px 30px rgba(2,6,23,.3)}
+    #pergunta{font-size:20px; margin:0 0 14px 0}
+    .opcoes{display:grid; gap:10px; margin-top:12px}
+    button.opcao{
+      background:#0f2137; border:1px solid #1f2937; padding:12px 14px; border-radius:10px; cursor:pointer;
+      color:var(--text); text-align:left; transition:.15s; font-size:16px;
+    }
+    button.opcao:hover{border-color:#334155; transform:translateY(-1px)}
+    .rodape{display:flex; gap:10px; margin-top:16px; align-items:center}
+    .rodape button.action{
+      background:var(--accent); border:none; padding:10px 14px; border-radius:10px; cursor:pointer; color:#0b1220; font-weight:600;
+    }
+    #resultado{min-height:22px; font-weight:600}
+    .ok{color:var(--ok)} .err{color:var(--danger)}
+    .status{color:var(--muted); font-size:13px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quiz de Inteligência</h1>
+    <p>As questões aparecem em ordem aleatória, e as opções também.</p>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <h2 id="pergunta">Carregando pergunta...</h2>
+      <div id="opcoes" class="opcoes"></div>
+      <div class="rodape">
+        <button id="btnProxima" class="action">Próxima</button>
+        <span id="resultado"></span>
+        <span id="status" class="status"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== Suas questões (sem numeração e sem grau de dificuldade) ======
+    const questoes = [
+      {
+        pergunta: "A diferença entre dado e informação está em:",
+        opcoes: ["O dado já é conhecimento processado.", "A informação é apenas um conjunto de números.", "O dado é bruto, a informação é organizada e interpretada.", "Não existe diferença, são sinônimos."],
+        correta: "O dado é bruto, a informação é organizada e interpretada."
+      },
+      {
+        pergunta: "Qual documento normativo instituiu o Sistema Brasileiro de Inteligência (SISBIN)?",
+        opcoes: ["Decreto nº 3.696/2000", "Lei nº 9.883/1999", "Constituição Federal de 1988, art. 142", "Lei Complementar nº 10.990/1997"],
+        correta: "Lei nº 9.883/1999"
+      },
+      {
+        pergunta: "Órgão central do Sistema Brasileiro de Inteligência (SISBIN):",
+        opcoes: ["Polícia Federal", "Forças Armadas", "ABIN – Agência Brasileira de Inteligência", "Ministério da Justiça"],
+        correta: "ABIN – Agência Brasileira de Inteligência"
+      },
+      {
+        pergunta: "Entre os produtos de inteligência, qual é o mais indicado para atualizar periodicamente o comando sobre uma situação em evolução?",
+        opcoes: ["Informe de Inteligência", "Relatório de Inteligência", "Boletim de Inteligência", "Nota de Serviço"],
+        correta: "Boletim de Inteligência"
+      },
+      {
+        pergunta: "Qual seção do Estado-Maior da OPM é responsável pela atividade de inteligência?",
+        opcoes: ["P-1 (Pessoal)", "P-2 (Inteligência)", "P-3 (Operações)", "P-4 (Logística)"],
+        correta: "P-2 (Inteligência)"
+      },
+      {
+        pergunta: "São produtos típicos de inteligência, exceto:",
+        opcoes: ["Informe", "Relatório de Inteligência", "Boletim de Inteligência", "Inquérito Policial"],
+        correta: "Inquérito Policial"
+      },
+      {
+        pergunta: "Exemplo de situação que exige atuação da inteligência policial:",
+        opcoes: ["Manutenção predial da OPM.", "Levantamento de possíveis ameaças em grandes eventos.", "Preenchimento de folha de pagamento.", "Escala de férias dos policiais."],
+        correta: "Levantamento de possíveis ameaças em grandes eventos."
+      },
+      {
+        pergunta: "O ciclo de inteligência compreende quatro fases principais. Qual delas corresponde à produção do conhecimento?",
+        opcoes: ["Planejamento", "Obtenção de dados", "Análise", "Difusão"],
+        correta: "Análise"
+      },
+      {
+        pergunta: "Uma diferença entre inteligência e investigação criminal é:",
+        opcoes: ["A inteligência busca prevenir, a investigação busca reprimir.", "Ambas são idênticas em métodos e objetivos.", "A investigação ocorre antes da inteligência.", "A inteligência só ocorre em ambiente militar."],
+        correta: "A inteligência busca prevenir, a investigação busca reprimir."
+      },
+      {
+        pergunta: "Um comandante solicita ao P-2 informações sobre possíveis grupos organizados que possam agir em protestos. O produto mais adequado seria:",
+        opcoes: ["Parte de serviço.", "Boletim de Inteligência.", "Relatório de Inteligência.", "Escala extraordinária."],
+        correta: "Relatório de Inteligência."
+      },
+      {
+        pergunta: "O papel do P-2 dentro da OPM é:",
+        opcoes: ["Controlar armamento.", "Atuar no ciclo de inteligência, subsidiando decisões do comando.", "Elaborar escalas de serviço.", "Conceder licenças e férias."],
+        correta: "Atuar no ciclo de inteligência, subsidiando decisões do comando."
+      },
+      {
+        pergunta: "Um dos princípios fundamentais da doutrina de inteligência é:",
+        opcoes: ["Impessoalidade e objetividade.", "Parcialidade e informalidade.", "Precipitação e improviso.", "Publicidade irrestrita."],
+        correta: "Impessoalidade e objetividade."
+      },
+      {
+        pergunta: "A Lei nº 9.883/1999 criou a ABIN e o SISBIN. A relação dessa lei com a Brigada Militar é:",
+        opcoes: ["Nenhuma, pois a BM não faz parte do SISBIN.", "A BM integra o SISBIN, produzindo conhecimento em âmbito estadual.", "A BM apenas recebe relatórios da ABIN, sem produzir inteligência.", "O SISBIN substitui a inteligência da BM."],
+        correta: "A BM integra o SISBIN, produzindo conhecimento em âmbito estadual."
+      },
+      {
+        pergunta: "Durante um evento esportivo, a inteligência detecta cambistas e falsificação de ingressos. A medida correta do P-2 é:",
+        opcoes: ["Produzir relatório de inteligência e subsidiar a decisão do comando.", "Prender imediatamente os suspeitos sem análise.", "Comunicar apenas a imprensa.", "Não agir, pois não é sua atribuição."],
+        correta: "Produzir relatório de inteligência e subsidiar a decisão do comando."
+      },
+      {
+        pergunta: "Por que se afirma que a inteligência deve ser proativa e não apenas reativa?",
+        opcoes: ["Porque age somente depois dos crimes.", "Porque antecipa riscos, prevenindo ocorrências.", "Porque depende sempre da investigação criminal.", "Porque só atua em operações conjuntas."],
+        correta: "Porque antecipa riscos, prevenindo ocorrências."
+      }
+    ];
+
+    // ====== Lógica do jogo ======
+    const usado = new Set();
+    let perguntaAtual = null;
+    let pontuacao = 0;
+
+    function shuffle(arr){
+      const a = arr.slice();
+      for(let i=a.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [a[i],a[j]] = [a[j],a[i]];
+      }
+      return a;
+    }
+
+    function proximaPergunta(){
+      const status = document.getElementById("status");
+      status.textContent = `${usado.size}/${questoes.length} respondidas • Pontos: ${pontuacao}`;
+      document.getElementById("resultado").textContent = "";
+
+      if(usado.size === questoes.length){
+        document.getElementById("pergunta").textContent = "Fim do Quiz! Parabéns pelo empenho.";
+        document.getElementById("opcoes").innerHTML = "";
+        document.getElementById("btnProxima").disabled = true;
+        return;
+      }
+
+      // escolhe uma ainda não usada
+      let idx;
+      do { idx = Math.floor(Math.random()*questoes.length); } while(usado.has(idx));
+      usado.add(idx);
+      perguntaAtual = questoes[idx];
+
+      // render
+      document.getElementById("pergunta").textContent = perguntaAtual.pergunta;
+      const opcoesEmbaralhadas = shuffle(perguntaAtual.opcoes);
+
+      const cont = document.getElementById("opcoes");
+      cont.innerHTML = "";
+      opcoesEmbaralhadas.forEach(op => {
+        const btn = document.createElement("button");
+        btn.className = "opcao";
+        btn.textContent = op;
+        btn.dataset.correct = (op === perguntaAtual.correta) ? "1" : "0";
+        btn.addEventListener("click", onEscolha);
+        cont.appendChild(btn);
+      });
+    }
+
+    function onEscolha(ev){
+      const correto = ev.currentTarget.dataset.correct === "1";
+      const res = document.getElementById("resultado");
+      if(correto){
+        res.textContent = "✅ Correto!";
+        res.className = "ok";
+        pontuacao++;
+      }else{
+        res.textContent = "❌ Errado!";
+        res.className = "err";
+      }
+      // desabilita cliques após resposta
+      document.querySelectorAll("button.opcao").forEach(b=>b.disabled=true);
+      // atualiza status
+      document.getElementById("status").textContent = `${usado.size}/${questoes.length} respondidas • Pontos: ${pontuacao}`;
+    }
+
+    document.getElementById("btnProxima").addEventListener("click", proximaPergunta);
+    proximaPergunta();
+  </script>
+</body>
+</html>
