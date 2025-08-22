@@ -411,7 +411,7 @@
     if (navigator.storage && navigator.storage.persist) {
       navigator.storage.persist().then(granted => {
         const meta = document.getElementById('metaInfo');
-        if (granted) meta.textContent = 'Top 10 • armazenamento protegido (persist)';
+        if (granted) meta.textContent = 'Top 25 • armazenamento protegido (persist)';
       }).catch(()=>{});
     }
 
@@ -490,3 +490,4 @@
   </script>
 </body>
 </html>
+
