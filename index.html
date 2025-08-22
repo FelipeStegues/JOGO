@@ -32,10 +32,14 @@
 
     /* Ranking */
     .ranking h3{margin:0 0 8px 0}
-    .ranking .meta{color:var(--muted); font-size:12px; margin-bottom:8px}
+    .ranking .meta{color:var(--muted); font-size:12px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:8px}
     .ranking ol{margin:0; padding-left:18px}
     .ranking li{margin:4px 0; display:flex; justify-content:space-between; gap:8px}
     .you{background:#0b1220; border:1px dashed #334155; padding:8px 10px; border-radius:10px; margin-top:12px}
+
+    .tools{display:flex; gap:8px; flex-wrap:wrap}
+    .btn-sm{background:#0f2137; color:var(--text); border:1px solid #273449; padding:6px 10px; border-radius:8px; cursor:pointer; font-size:12px}
+    .btn-sm:hover{border-color:#334155}
 
     /* Modal de identificação */
     .modal{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2,6,23,.6); backdrop-filter: blur(2px);}
@@ -75,9 +79,15 @@
       <h3>Ranking da Turma</h3>
       <div class="meta">
         <span id="metaInfo">Top 10 • melhor pontuação por aluno</span>
+        <div class="tools">
+          <button id="btnExport" class="btn-sm" title="Baixar ranking (.json)">Exportar</button>
+          <button id="btnImport" class="btn-sm" title="Importar ranking (.json)">Importar</button>
+          <button id="btnClear" class="btn-sm" title="Apagar ranking local">Limpar</button>
+        </div>
       </div>
       <ol id="listaRanking"></ol>
       <div id="voceBox" class="you" style="display:none"></div>
+      <input id="fileInput" type="file" accept="application/json,.json" style="display:none" />
     </div>
   </div>
 
@@ -375,6 +385,7 @@
         const rankAll = useFirebase ? [] : getRankingLocal();
         const registro = rankAll.find(r => r.nome.toLowerCase() === nomeAtual.toLowerCase());
         if(registro){
+          // procura posição do jogador dentro do top exibido
           const pos = lista.findIndex(r => r.nome.toLowerCase() === nomeAtual.toLowerCase());
           you.style.display = 'block';
           you.textContent = pos >= 0
@@ -387,6 +398,89 @@
         you.style.display = 'none';
       }
     }
+
+    // ==========================
+    // Persistência aprimorada + Export/Import
+    // ==========================
+    const btnExport = document.getElementById('btnExport');
+    const btnImport = document.getElementById('btnImport');
+    const btnClear  = document.getElementById('btnClear');
+    const fileInput = document.getElementById('fileInput');
+
+    // Solicita "persistência" ao navegador (evita limpeza do storage em falta de espaço)
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().then(granted => {
+        const meta = document.getElementById('metaInfo');
+        if (granted) meta.textContent = 'Top 10 • armazenamento protegido (persist)';
+      }).catch(()=>{});
+    }
+
+    function exportRanking(){
+      const data = getRankingLocal();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+      a.href = url;
+      a.download = `ranking-quiz-p2-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function mergeRankings(baseArr, importArr){
+      const map = new Map();
+      const push = (r)=>{
+        const key = r.nome.trim().toLowerCase();
+        const prev = map.get(key);
+        if(!prev) {
+          map.set(key, { nome: r.nome, score: r.score|0, quando: r.quando || new Date().toISOString() });
+        } else {
+          // mantém a melhor pontuação; em empate, fica o mais recente
+          const bestScore = Math.max(prev.score, r.score|0);
+          const bestQuando = (bestScore === prev.score)
+            ? ( (r.score|0) === prev.score ? ( (r.quando||'') > (prev.quando||'') ? r.quando : prev.quando ) : prev.quando )
+            : (r.score|0) > prev.score ? (r.quando || prev.quando) : prev.quando;
+          map.set(key, { nome: r.nome, score: bestScore, quando: bestQuando });
+        }
+      };
+      baseArr.forEach(push);
+      importArr.forEach(push);
+      return Array.from(map.values()).sort((a,b)=> b.score - a.score || (b.quando||'').localeCompare(a.quando||''));
+    }
+
+    function importRankingFromFile(file){
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const imported = JSON.parse(reader.result);
+          if(!Array.isArray(imported)) throw new Error('Formato inválido');
+          const valid = imported.filter(r=> r && typeof r.nome==='string' && typeof r.score!=='undefined');
+          const merged = mergeRankings(getRankingLocal(), valid);
+          setRankingLocal(merged);
+          alert('Ranking importado com sucesso!');
+          carregarERenderRanking(jogador?.id);
+        }catch(e){
+          alert('Falha ao importar: arquivo inválido.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    btnExport.addEventListener('click', exportRanking);
+    btnImport.addEventListener('click', ()=> fileInput.click());
+    btnClear.addEventListener('click', ()=>{
+      if(confirm('Tem certeza que deseja limpar o ranking local?')){
+        setRankingLocal([]);
+        carregarERenderRanking(jogador?.id);
+      }
+    });
+    fileInput.addEventListener('change', (e)=>{
+      const f = e.target.files?.[0];
+      if(f) importRankingFromFile(f);
+      e.target.value = '';
+    });
 
     // ==========================
     // INÍCIO: esperar identificação
